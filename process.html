@@ -1,0 +1,60 @@
+<?php 
+	session_start();
+?>
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8" />
+<title>Kirsh Lab</title>
+<link rel="stylesheet" type="text/css" href="css/style.css?<?php echo rand(1,1000000) ?>" media="screen">
+<link href="http://fonts.googleapis.com/css?family=Open+Sans:400,600" rel="stylesheet" type="text/css">
+<!--<script src="myscripts.js"></script>-->
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+</head>
+<body>
+<div id="header">
+	
+	<div style='float: right; padding-right: 20px; padding-top: 25px;'>
+	Experiment Coding - INTERACTIVE COGNITION LAB
+	</div>
+</div>
+<div style="width: 1000px; margin-right: auto; margin-left: auto">
+<?
+	$mysqli = new mysqli("localhost","root", "paintFRAME!", "scrabble");
+	if (mysqli_connect_errno()) 
+	{
+		printf("Connect failed: %s\n", mysqli_connect_error());
+		exit();
+	}
+$demoIDS= $_POST['demo_ids'];
+foreach ($demoIDS as $demoID)
+{
+	echo "$demoID";
+	mysqli_query($mysqli, "CREATE TABLE `processing-".$demoID."` AS (SELECT `coding-f-raw`.*, 
+	1000000 * (`all_words`.ngram_value) AS word_freq, char_length(`coding-f-raw`.word) AS char_count 
+	FROM `all_words`, `coding-f-raw` WHERE `demographics_id`=".$demoID." 
+	AND `coding-f-raw`.word = `all_words`.word GROUP BY `coding-f-raw`.time ORDER BY `coding-f-raw`.word ASC)");
+	mysqli_query($mysqli, "CREATE TABLE `temp-".$demoID."` AS ( SELECT @dupe_count:=CASE 
+	WHEN @db_names=`word` AND @position=`position` THEN @dupe_count+1 ELSE 0 END AS dupe_count,
+	@db_names:=`word` AS db_names, @position:=`position` AS positions, @time:=`time` AS time 
+	FROM `processing-".$demoID."`, (SELECT @dupe_count:=0,@db_names:='',@position:='',@time:=0) AS t
+	ORDER BY db_names )");
+	mysqli_query($mysqli, "ALTER TABLE `temp-".$demoID."` MODIFY COLUMN `time` time, MODIFY COLUMN `dupe_count` int(5)");
+	mysqli_query($mysqli, "CREATE TABLE `procesed-".$demoID."` AS ( SELECT DISTINCT `processing-".$demoID."`.*, 
+	`temp-".$demoID."`.dupe_count FROM `processing-".$demoID."` INNER JOIN `temp-".$demoID."` 
+	ON (`processing-".$demoID."`.`word` = `temp-".$demoID."`.db_names) 
+	AND (`processing-".$demoID."`.`position` = `temp-".$demoID."`.positions) 
+	AND (`processing-".$demoID."`.`time` = `temp-".$demoID."`.time) )
+	ORDER BY time");	
+	mysqli_query($mysqli, "DROP TABLE `processing-".$demoID."`, `temp-".$demoID."` ");
+	mysqli_query($mysqli, "ALTER TABLE `procesed-".$demoID."` ADD COLUMN binned_min int(1)");
+	
+	
+	//This is where the magic happens:
+	
+	//http://sqlfiddle.com/#!2/1d1f3/34
+	//http://stackoverflow.com/questions/2026956/want-row-number-on-group-of-column-in-my-sql
+
+}
+?>
+</div>
